@@ -18,12 +18,13 @@
 
 const int timesToRun = 5;
 const int threadCount = 2;
-const uint64_t nonEdgeNodes = 50000;
+const uint64_t nonEdgeNodes = 100000;
 
 uint64_t averageTimedComputation(std::function<void (void)> func, int times)
 {
     uint64_t totalTime = 0;
     
+    // This timing function is OS X only (well, Mach kernels)
     for (int i = 0; i < times; i++)
     {
         uint64_t start = mach_absolute_time();
@@ -72,10 +73,17 @@ uint64_t runTest(std::function<std::function<void()> (std::vector<Node *>&)> rem
 
 int main(int argc, const char * argv[])
 {
+#ifdef DEBUG
+    std::cout << "I'm a DEBUG build!" << std::endl;
+#else
+    std::cout << "I'm a RELEASE build!" << std::endl;
+#endif
+    
     static_assert(nonEdgeNodes % threadCount == 0, "Edge nodes must divide thread-count");
     
     // Show the hardware concurrency level
-    std::cout << "Hardware will use " << std::thread::hardware_concurrency() << " threads" << std::endl;
+    std::cout << "I'll use " << threadCount << " threads with " << nonEdgeNodes << " central nodes, times averaged over " << timesToRun << " runs" << std::endl;
+    std::cout << "Hardware has " << std::thread::hardware_concurrency() << " threads" << std::endl;
 
     // The threaded implementations start threadCount threads, each handling threadCount / nonEdgeNodes nodes in a linear partition
     auto computeFunc = [](RemoveType removeType) {
@@ -124,18 +132,18 @@ int main(int argc, const char * argv[])
     std::cout << "Parent lock only implementation" << std::endl;
     totalTime = runTest(computeFunc(ParentLockOnly));
     std::cout << "  Ticks taken: " << totalTime / timesToRun << " over " << timesToRun << " runs" << std::endl;
-    std::cout << "That's " << ((double)totalTime / linearTime) * 100 << "% of the linear time" << std::endl;
+    std::cout << "  That's " << ((double)totalTime / linearTime) * 100 << "% of the linear time" << std::endl;
     
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << "Parent and sibling locks implementation" << std::endl;
     totalTime = runTest(computeFunc(ParentAndSiblingLocks));
     std::cout << "  Ticks taken: " << totalTime / timesToRun << " over " << timesToRun << " runs" << std::endl;
-    std::cout << "That's " << ((double)totalTime / linearTime) * 100 << "% of the linear time" << std::endl;
+    std::cout << "  That's " << ((double)totalTime / linearTime) * 100 << "% of the linear time" << std::endl;
     
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << "Sibling locks plus backoff implementation" << std::endl;
     totalTime = runTest(computeFunc(SiblingLocksBackoff));
     std::cout << "  Ticks taken: " << totalTime / timesToRun << " over " << timesToRun << " runs" << std::endl;
-    std::cout << "That's " << ((double)totalTime / linearTime) * 100 << "% of the linear time" << std::endl;
+    std::cout << "  That's " << ((double)totalTime / linearTime) * 100 << "% of the linear time" << std::endl;
 }
 
