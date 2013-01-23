@@ -28,7 +28,6 @@
 		0792E8D816AD7CF00003D5B5 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		0792E8E116AD9E250003D5B5 /* Tree.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Tree.h; sourceTree = "<group>"; };
 		0792E8E216AD9E5D0003D5B5 /* Tree.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Tree.cpp; path = ../Tree.cpp; sourceTree = "<group>"; };
-		0792E8E516ADA3310003D5B5 /* Options.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Options.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,7 +63,6 @@
 				0792E8D816AD7CF00003D5B5 /* main.cpp */,
 				0792E8E216AD9E5D0003D5B5 /* Tree.cpp */,
 				0792E8E116AD9E250003D5B5 /* Tree.h */,
-				0792E8E516ADA3310003D5B5 /* Options.h */,
 			);
 			path = ConcurrentTreeTest;
 			sourceTree = "<group>";
@@ -214,6 +212,7 @@
 				0792E8E016AD7CF00003D5B5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

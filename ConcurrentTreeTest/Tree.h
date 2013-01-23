@@ -6,6 +6,13 @@
 //  Copyright (c) 2013 Adam Wright. All rights reserved.
 //
 
+enum RemoveType
+{
+    NoLocks,
+    ParentLockOnly,
+    ParentAndSiblingLocks,
+    SiblingLocksBackoff
+};
 
 struct Node
 {
@@ -26,6 +33,17 @@ public:
     {
     }
     
-    void remove();
+    void remove(RemoveType type);
+    
     void appendChild(Node *child);
+    
+protected:
+    void removeNoLocks();
+    void removeParentLockOnly();
+    void removeParentAndSiblingLocks();
+    void removeSiblingLocksBackoff();
+    
+    void removeFixupParent();    
+    void removeFixupSibs();
+    void removeFixupSelf();
 };

@@ -6,17 +6,34 @@
 //  Copyright (c) 2013 Adam Wright. All rights reserved.
 //
 
-#include "Options.h"
-
 #include <thread>
 
 #include "Tree.h"
 
 std::mutex Node::rootLock;
 
-void Node::remove()
+void Node::remove(RemoveType type)
 {
-#if THREADED
+    switch (type)
+    {
+        case NoLocks:
+            removeNoLocks();
+            break;
+        case ParentLockOnly:
+            removeParentLockOnly();
+            break;
+        case ParentAndSiblingLocks:
+            removeParentAndSiblingLocks();
+            break;
+        case SiblingLocksBackoff:
+            removeSiblingLocksBackoff();
+            break;
+    }
+    
+}
+
+void Node::removeParentAndSiblingLocks()
+{
     // Take the parent lock (or the root lock if we have no parent)
     std::mutex *lockingLock;
     if (parent == nullptr)
@@ -24,17 +41,11 @@ void Node::remove()
     else
         lockingLock = &parent->parentLock;
     lockingLock->lock();
-#endif
     
     // If we are the first element of the parent, change it's first child whilst we hold the lock
-    if (parent != nullptr && parent->firstChild == this)
-        parent->firstChild = this->right;
-    // Similarly, the last child
-    if (parent != nullptr && parent->lastChild == this)
-        parent->lastChild = this->left;
+    removeFixupParent();
     
     // Now handle siblings
-#if THREADED && USE_SIB_LOCKS
     // Take the left and right locks
     // Release the parent (locking) lock
     if (left != nullptr)
@@ -50,18 +61,10 @@ void Node::remove()
     }
     
     lockingLock->unlock();
-#endif
     
     // Unhook us from the sibling chain
-    if (left != nullptr && right != nullptr)
-    {
-        left->right = right;
-        right->left = left;
-    }
-    // ASSUMPTION: We are in the middle of a list
+    removeFixupSibs();
     
-#if THREADED
-#if USE_SIB_LOCKS
     if (left != nullptr)
     {
         left->rightLock.unlock();
@@ -73,16 +76,114 @@ void Node::remove()
         right->leftLock.unlock();
         rightLock.unlock();
     }
-#else
-    // Release the locking lock
-    lockingLock->unlock();
-#endif
-    #endif
     
+    removeFixupSelf();
+}
+
+void Node::removeSiblingLocksBackoff()
+{
+    // If we are the first element of the parent, change it's first child whilst we hold the lock
+    if (parent != nullptr)
+    {
+        parent->parentLock.lock();
+        
+        removeFixupParent();
+        
+        parent->parentLock.unlock();
+    }
+    
+    // Now handle siblings
+
+    // Take the left and right locks
+    // Release the parent (locking) lock
+    if (left != nullptr)
+    {
+        while (true)
+        {
+            leftLock.lock();
+            if (left->rightLock.try_lock())
+                break;
+            leftLock.unlock();
+        }
+    }
+    
+    if (right != nullptr)
+    {
+        while (true)
+        {
+            rightLock.lock();
+            if (right->leftLock.try_lock())
+                break;
+            rightLock.unlock();
+        }
+    }
+        
+    // Unhook us from the sibling chain
+    removeFixupSibs();
+
+    if (left != nullptr)
+    {
+        left->rightLock.unlock();
+        leftLock.unlock();
+    }
+    
+    if (right != nullptr)
+    {
+        right->leftLock.unlock();
+        rightLock.unlock();
+    }
+    
+    removeFixupSelf();
+}
+
+void Node::removeNoLocks()
+{
+    removeFixupParent();
+    removeFixupSibs();
+    removeFixupSelf();
+}
+
+void Node::removeParentLockOnly()
+{
+    std::mutex *lockingLock;
+    if (parent == nullptr)
+        lockingLock = &rootLock;
+    else
+        lockingLock = &parent->parentLock;
+    lockingLock->lock();
+    
+    removeFixupParent();
+    removeFixupSibs();
+    
+    lockingLock->unlock();
+    
+    removeFixupSelf();
+}
+
+void Node::removeFixupParent()
+{
+    if (parent != nullptr && parent->firstChild == this)
+        parent->firstChild = this->right;
+    // Similarly, the last child
+    if (parent != nullptr && parent->lastChild == this)
+        parent->lastChild = this->left;
+}
+
+void Node::removeFixupSibs()
+{
+    if (left != nullptr)
+        left->right = right;
+    if (right != nullptr)
+        right->left = left;
+}
+
+void Node::removeFixupSelf()
+{
     parent = nullptr;
     left = nullptr;
     right = nullptr;
 }
+
 
 void Node::appendChild(Node *child)
 {
