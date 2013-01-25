@@ -182,12 +182,9 @@ inline void Node::lockAll()
 {
     bool lockFailed = true;
     
-    if (parent == nullptr)
-        std::cout << "SHOUDLN'T BE";
-    
     while (lockFailed)
     {
-        selfLock.lock();
+        //selfLock.lock();
         
         OurMutex *leftLock = nullptr;
         OurMutex *rightLock = nullptr;
@@ -296,10 +293,10 @@ void Node::removeParentLockOnly()
 
 void Node::removeFixupParent()
 {
-    if (parent != nullptr && parent->firstChild == this)
+    if (left == nullptr && parent != nullptr)
         parent->firstChild = this->right;
     // Similarly, the last child
-    if (parent != nullptr && parent->lastChild == this)
+    if (right != nullptr && parent != nullptr)
         parent->lastChild = this->left;
 }
 

@@ -18,7 +18,7 @@
 
 const int timesToRun = 5;
 const int threadCount = 4;
-const uint64_t nodeCount = 5000000;
+const uint64_t nodeCount = 1000000;
 
 uint64_t runTest(std::function<void (std::vector<Node *>&)> removeFunc)
 {
