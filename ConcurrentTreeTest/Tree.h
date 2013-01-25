@@ -6,6 +6,39 @@
 //  Copyright (c) 2013 Adam Wright. All rights reserved.
 //
 
+#include <atomic>
+
+#define FOUR_LOCK false
+
+// Data race writes are to locked flag, so no atomic needed
+struct SpinLock
+{
+    std::atomic_flag locked;
+    
+    SpinLock() : locked(ATOMIC_FLAG_INIT)
+    {
+    }
+    
+    void lock()
+    {
+        while (std::atomic_flag_test_and_set_explicit(&locked, std::memory_order_acq_rel));
+    }
+    
+    void unlock()
+    {
+        std::atomic_flag_clear_explicit(&locked, std::memory_order_release);
+    }
+    
+    bool try_lock()
+    {
+        return (std::atomic_flag_test_and_set_explicit(&locked, std::memory_order_acq_rel) == false);
+    }
+};
+
+typedef SpinLock OurMutex;
+//typedef std::mutex OurMutex;
+
+
 enum RemoveType
 {
     NoLocks,
@@ -22,20 +55,28 @@ struct Node
     Node *right;
     Node *firstChild;
     Node *lastChild;
+    int data;
     
-    std::mutex parentLock;
-    std::mutex leftLock;
-    std::mutex rightLock;
-    static std::mutex rootLock;
+#if FOUR_LOCK
+    OurMutex parentLock;
+    OurMutex leftLock;
+    OurMutex rightLock;
+    OurMutex firstChildLock;
+    OurMutex lastChildLock;
+#else
+    OurMutex selfLock;
+#endif
+    static OurMutex rootLock;
     
 public:
-    Node() : parent(nullptr), left(nullptr), right(nullptr), firstChild(nullptr), lastChild(nullptr)
+    Node() : parent(nullptr), left(nullptr), right(nullptr), firstChild(nullptr), lastChild(nullptr), data(0)
     {
     }
     
     void remove(RemoveType type);
     
     void appendChild(Node *child);
+    int getData();
     
 protected:
     void removeNoLocks();
@@ -46,4 +87,14 @@ protected:
     void removeFixupParent();    
     void removeFixupSibs();
     void removeFixupSelf();
+    
+#if FOUR_LOCK
+    inline void lockLeft();
+    inline void lockRight();
+    inline void unlockLeft();
+    inline void unlockRight();
+#else
+    inline void lockAll();
+    inline void unlockAll();
+#endif
 };

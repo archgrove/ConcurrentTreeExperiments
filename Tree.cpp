@@ -7,10 +7,11 @@
 //
 
 #include <thread>
+#include <iostream>
 
 #include "Tree.h"
 
-std::mutex Node::rootLock;
+OurMutex Node::rootLock;
 
 void Node::remove(RemoveType type)
 {
@@ -34,8 +35,9 @@ void Node::remove(RemoveType type)
 
 void Node::removeParentAndSiblingLocks()
 {
+    /*
     // Take the parent lock (or the root lock if we have no parent)
-    std::mutex *lockingLock;
+    OurMutex *lockingLock;
     if (parent == nullptr)
         lockingLock = &rootLock;
     else
@@ -67,6 +69,7 @@ void Node::removeParentAndSiblingLocks()
     
     if (left != nullptr)
     {
+        leftLock.lock();
         left->rightLock.unlock();
         leftLock.unlock();
     }
@@ -78,63 +81,192 @@ void Node::removeParentAndSiblingLocks()
     }
     
     removeFixupSelf();
+     */
+}
+
+#if FOUR_LOCK
+
+inline void Node::lockLeft()
+{
+    bool lockFailed = true;
+    
+    while (lockFailed)
+    {
+        leftLock.lock();
+
+        if (left != nullptr)
+        {
+            // Lock my left sibling
+            lockFailed = !left->rightLock.try_lock();            
+        }
+        else if (parent != nullptr)
+        {
+            // No left, so lock my parents first child
+            lockFailed = !parent->firstChildLock.try_lock();
+        }
+        else
+        {
+            // No left nor parent, so no need to lock anything
+            lockFailed = false;
+        }
+        
+        // Backoff if I couldn't lock
+        if (lockFailed)
+        {
+            leftLock.unlock();
+        }
+    }
+}
+
+inline void Node::lockRight()
+{
+    rightLock.lock();
+    
+    if (right != nullptr)
+    {
+        right->leftLock.lock();
+    }
+    else if (parent != nullptr)
+    {
+        parent->lastChildLock.lock();
+    }
+}
+
+inline void Node::unlockLeft()
+{
+    if (left != nullptr)
+    {
+        left->rightLock.unlock();
+    }
+    else if (parent != nullptr)
+    {
+        parent->firstChildLock.unlock();
+    }
+    
+    leftLock.unlock();
+}
+
+inline void Node::unlockRight()
+{
+    if (right != nullptr)
+    {
+        right->leftLock.unlock();
+    }
+    else if (parent)
+    {
+        parent->lastChildLock.unlock();
+    }
+    
+    rightLock.unlock();
+}
+
+
+void Node::removeSiblingLocksBackoff()
+{
+    lockLeft();
+    lockRight();
+    
+    removeFixupParent();
+    removeFixupSibs();
+    
+    unlockRight();
+    unlockLeft();
+    removeFixupSelf();
+    
+}
+
+
+#else
+
+inline void Node::lockAll()
+{
+    bool lockFailed = true;
+    
+    if (parent == nullptr)
+        std::cout << "SHOUDLN'T BE";
+    
+    while (lockFailed)
+    {
+        selfLock.lock();
+        
+        OurMutex *leftLock = nullptr;
+        OurMutex *rightLock = nullptr;
+        
+        if (left != nullptr)
+        {
+            leftLock = &left->selfLock;
+        }
+        else if (parent != nullptr)
+        {
+            leftLock = &parent->selfLock;
+        }
+        
+        if (right != nullptr)
+        {
+            // Lock my left sibling
+            rightLock = &right->selfLock;
+        }
+        else if (parent != nullptr && left != nullptr)
+        {
+            // No left, so lock my parents first child
+            rightLock = &parent->selfLock;
+        }
+        
+        lockFailed = !leftLock->try_lock();
+        
+        if (lockFailed)
+        {
+            selfLock.unlock();
+            continue;
+        }
+        
+        if (rightLock != nullptr)
+            lockFailed = !rightLock->try_lock();
+        
+        if (lockFailed)
+        {
+            leftLock->unlock();
+            selfLock.unlock();
+        }
+    }
+}
+
+inline void Node::unlockAll()
+{
+    if (left != nullptr)
+    {
+        left->selfLock.unlock();
+    }
+    else if (parent != nullptr)
+    {
+        parent->selfLock.unlock();
+    }
+    
+    if (right != nullptr)
+    {
+        right->selfLock.unlock();
+    }
+    else if (parent != nullptr && left != nullptr)
+    {
+        parent->selfLock.unlock();
+    }
+
+    selfLock.unlock();
 }
 
 void Node::removeSiblingLocksBackoff()
 {
-    // If we are the first element of the parent, change it's first child whilst we hold the lock
-    if (parent != nullptr)
-    {
-        parent->parentLock.lock();
-        
-        removeFixupParent();
-        
-        parent->parentLock.unlock();
-    }
+    lockAll();
     
-    // Now handle siblings
-
-    // Take the left and right locks
-    // Release the parent (locking) lock
-    if (left != nullptr)
-    {
-        while (true)
-        {
-            leftLock.lock();
-            if (left->rightLock.try_lock())
-                break;
-            leftLock.unlock();
-        }
-    }
-    
-    if (right != nullptr)
-    {
-        while (true)
-        {
-            rightLock.lock();
-            if (right->leftLock.try_lock())
-                break;
-            rightLock.unlock();
-        }
-    }
-        
-    // Unhook us from the sibling chain
+    removeFixupParent();
     removeFixupSibs();
-
-    if (left != nullptr)
-    {
-        left->rightLock.unlock();
-        leftLock.unlock();
-    }
     
-    if (right != nullptr)
-    {
-        right->leftLock.unlock();
-        rightLock.unlock();
-    }
-    
+    unlockAll();
     removeFixupSelf();
 }
+
+
+#endif
 
 void Node::removeNoLocks()
 {
@@ -145,7 +277,8 @@ void Node::removeNoLocks()
 
 void Node::removeParentLockOnly()
 {
-    std::mutex *lockingLock;
+    /*
+    OurMutex *lockingLock;
     if (parent == nullptr)
         lockingLock = &rootLock;
     else
@@ -158,6 +291,7 @@ void Node::removeParentLockOnly()
     lockingLock->unlock();
     
     removeFixupSelf();
+     */
 }
 
 void Node::removeFixupParent()
@@ -187,7 +321,7 @@ void Node::removeFixupSelf()
 
 void Node::appendChild(Node *child)
 {
-    parentLock.lock();
+    //parentLock.lock();
     if (firstChild == nullptr)
     {
         firstChild = child;
@@ -201,5 +335,10 @@ void Node::appendChild(Node *child)
     }
     
     child->parent = this;
-    parentLock.unlock();
+    //parentLock.unlock();
+}
+
+int Node::getData()
+{
+    return data;
 }
