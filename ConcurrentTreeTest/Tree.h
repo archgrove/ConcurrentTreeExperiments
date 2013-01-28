@@ -57,19 +57,13 @@ struct Node
     Node *lastChild;
     int data;
     
-#if FOUR_LOCK
-    OurMutex parentLock;
-    OurMutex leftLock;
-    OurMutex rightLock;
-    OurMutex firstChildLock;
-    OurMutex lastChildLock;
-#else
-    OurMutex selfLock;
-#endif
+    OurMutex ownedLock;
+    OurMutex *refLock;
+
     static OurMutex rootLock;
     
 public:
-    Node() : parent(nullptr), left(nullptr), right(nullptr), firstChild(nullptr), lastChild(nullptr), data(0)
+    Node() : parent(nullptr), left(nullptr), right(nullptr), firstChild(nullptr), lastChild(nullptr), data(0), refLock(nullptr)
     {
     }
     
@@ -80,12 +74,11 @@ public:
     
 protected:
     void removeNoLocks();
-    void removeParentLockOnly();
-    void removeParentAndSiblingLocks();
     void removeSiblingLocksBackoff();
     
     void removeFixupParent();    
     void removeFixupSibs();
+    void removeFixupSibsThreaded();
     void removeFixupSelf();
     
 #if FOUR_LOCK
